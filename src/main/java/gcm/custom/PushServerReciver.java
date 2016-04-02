@@ -17,8 +17,12 @@ public class PushServerReciver extends NanoHTTPD {
 	public static PushServerReciver instance;
 
 	public static PushServerReciver getInstance() throws IOException {
+		return getInstance(PORT);
+	}
+
+	public static PushServerReciver getInstance(int port) throws IOException {
 		if (instance == null) {
-			instance = new PushServerReciver();
+			instance = new PushServerReciver(port);
 		}
 		return instance;
 	}
@@ -31,10 +35,9 @@ public class PushServerReciver extends NanoHTTPD {
 
 	private String pushToken;
 
-	private PushServerReciver() throws IOException {
-		super(PORT);
+	private PushServerReciver(int port) throws IOException {
+		super(port);
 		start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
-		System.out.println("Running " + PORT);
 	}
 
 	public synchronized Response serve(IHTTPSession session) {
@@ -54,13 +57,10 @@ public class PushServerReciver extends NanoHTTPD {
 			String type = body.optString("pushToken", null);
 			if (type == null) {
 				pushNotifications.add(body);
-				System.out.println(body);
-
 			} else {
 				String pushToken = body.getString("pushToken");
 				if (!pushToken.equals(this.pushToken)) {
 					this.pushToken = pushToken;
-					System.out.println(pushToken);
 				}
 			}
 
