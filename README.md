@@ -22,7 +22,9 @@ The App will send two Types of Requests:
  1. The Registration-Id of the App. Therefore the app will send a request each 100ms a POST request with the actual Regestration-Id. The Body-content of the request is ```{"pushToken":"<actual token>"}```
  2. The Push-Notification if recived. Therefore a POST reqest will be send to the defined url.
  
+# Abstract Workflow
 
+![](https://github.com/codemaker219/gcmproxy/blob/master/Zeichnung.gif)
 
   
  
