@@ -106,18 +106,28 @@ function onAcceptCallback(tcpConnection, socketInfo) {
 
 			} else if (obj.cmd == 'registerWithoutOverride') {
 
-				senderId = obj.senderId;
-				stringIdentifier = obj.stringIdentifier;
+				var force = senderId != obj.senderId
+						|| stringIdentifier != obj.stringIdentifier;
+
 				isRegistered(function(registered) {
 					if (!registered) {
+						senderId = obj.senderId;
+						stringIdentifier = obj.stringIdentifier;
 						register();
 					} else {
-						re = {
-							type : 'regestrationComplite',
-							token : registrationToken
-						};
-						var msg = window.btoa(JSON.stringify(re));
-						tcpConnection.sendMessage(msg);
+						if (force) {
+							unregister();
+							senderId = obj.senderId;
+							stringIdentifier = obj.stringIdentifier;
+							register();
+						} else {
+							re = {
+								type : 'regestrationComplite',
+								token : registrationToken
+							};
+							var msg = window.btoa(JSON.stringify(re));
+							tcpConnection.sendMessage(msg);
+						}
 					}
 
 				});
