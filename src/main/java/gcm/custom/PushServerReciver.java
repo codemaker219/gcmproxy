@@ -1,89 +1,110 @@
 package gcm.custom;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import java.io.OutputStreamWriter;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Scanner;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.json.JSONObject;
 
-import fi.iki.elonen.NanoHTTPD;
-import fi.iki.elonen.NanoHTTPD.Response.Status;
+public class PushServerReciver {
 
-public class PushServerReciver extends NanoHTTPD {
-
-	private static final int PORT = 9876;
-
-	public static PushServerReciver instance;
-
-	public static PushServerReciver getInstance() throws IOException {
-		return getInstance(PORT);
-	}
-
-	public static PushServerReciver getInstance(int port) throws IOException {
-		if (instance == null) {
-			instance = new PushServerReciver(port);
-		}
-		return instance;
-	}
-
-	public static void main(String[] args) throws IOException {
-		PushServerReciver.getInstance();
-	}
-
+	private static final String DELIMITER = "\n\r";
+	private Socket socket;
+	private OutputStreamWriter osw;
 	private ConcurrentLinkedQueue<JSONObject> pushNotifications = new ConcurrentLinkedQueue<>();
 
 	private String pushToken;
 
-	private PushServerReciver(int port) throws IOException {
-		super(port);
-		start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
-	}
+	private String senderId, stringIdentifier;
 
-	public synchronized Response serve(IHTTPSession session) {
-		Map<String, String> files = new HashMap<String, String>();
-		Method method = session.getMethod();
-		if (Method.POST.equals(method)) {
+	public PushServerReciver(String host, int port, String senderId, String stringIdentifier)
+			throws UnknownHostException, IOException {
+		socket = new Socket(host, port);
+		this.senderId = senderId;
+		this.stringIdentifier = stringIdentifier;
+		@SuppressWarnings("resource")
+		Scanner sc = new Scanner(socket.getInputStream());
 
-			try {
-				session.parseBody(files);
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-
-			// get the POST body
-			String postBody = files.get("postData");
-			JSONObject body = new JSONObject(postBody);
-			String type = body.optString("pushToken", null);
-			if (type == null) {
-				pushNotifications.add(body);
-			} else {
-				String pushToken = body.getString("pushToken");
-				if (!pushToken.equals(this.pushToken)) {
-					this.pushToken = pushToken;
+		new Thread() {
+			public void run() {
+				while (true) {
+					JSONObject code = decode(sc.nextLine());
+					String type = code.optString("type", null);
+					if ("unregestrationComplete".equals(type)) {
+						pushToken = "";
+					} else if ("regestrationComplite".equals(type)) {
+						pushToken = code.getString("token");
+					} else if ("push".equals(type)) {
+						pushNotifications.add(code.getJSONObject("push"));
+					} else if ("echoResponse".equals(type)) {
+						System.out.println(code);
+					} else if ("regestrationError".equals(type)) {
+						System.out.println(code);
+					} else if ("unregestrationError".equals(code)) {
+						System.out.println(code);
+					} else {
+						System.out.println("Can not interpret " + code);
+					}
 				}
 			}
+		}.start();
+		osw = new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8);
+	}
 
-		}
+	public String getSenderId() {
+		return senderId;
+	}
 
-		return newFixedLengthResponse(Status.OK, NanoHTTPD.MIME_PLAINTEXT, "ok i am ");
+	public String getStringIdentifier() {
+		return stringIdentifier;
+	}
+
+	public void sendCommand(JSONObject obj) throws IOException {
+		osw.write(encode(obj));
+		osw.flush();
+	}
+
+	private String encode(JSONObject obj) {
+		return Base64.getEncoder().encodeToString(obj.toString().getBytes(StandardCharsets.UTF_8)) + DELIMITER;
+	}
+
+	private JSONObject decode(String res) {
+		String asSeting = new String(Base64.getDecoder().decode(res), StandardCharsets.UTF_8);
+		return new JSONObject(asSeting);
 	}
 
 	public void clearQueue() {
 		this.pushNotifications.clear();
 	}
 
-	public String getPushToken(long timeOut) throws InterruptedException {
-		long waitet = 0;
-		while (waitet < timeOut) {
-			if (this.pushToken != null && !this.pushToken.isEmpty()) {
-				return this.pushToken;
-			}
-			Thread.sleep(10);
-			waitet += 10;
+	public String getPushToken(long timeOut) throws InterruptedException, IOException {
+		if (this.pushToken != null && !this.pushToken.isEmpty()) {
+			return this.pushToken;
+		} else {
+			JSONObject cmd = new JSONObject();
+			cmd.put("cmd", "registerWithoutOverride");
+			cmd.put("senderId", senderId);
+			cmd.put("stringIdentifier", stringIdentifier);
 
+			sendCommand(cmd);
+
+			long waitet = 0;
+			while (waitet < timeOut) {
+				if (this.pushToken != null && !this.pushToken.isEmpty()) {
+					return this.pushToken;
+				}
+				Thread.sleep(10);
+				waitet += 10;
+
+			}
+			throw new PushServerTimeOutException("No Push received in " + timeOut + "ms");
 		}
-		throw new PushServerTimeOutException("No Push received in " + timeOut + "ms");
+
 	}
 
 	public JSONObject getPush(long timeOut) throws InterruptedException {
