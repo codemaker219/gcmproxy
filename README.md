@@ -22,7 +22,6 @@ This app is a mix of https://github.com/googlesamples/gcm-playground and https:/
 
 ![](https://github.com/codemaker219/gcmproxy/blob/master/Zeichnung.gif)
 
-  
 # Communication
 
 There are a few commands that you can send to the Chrome-App. The commands are always in JSON and encoded in Base64 appended with the delimiter \n\r.
@@ -42,3 +41,32 @@ The Chrome-App will broadcast to every connected Client
 3. if during the registration-process something gone wrong: e.q ```{"type":"regestrationError","message":"XXX"}```
 4. if during the unregistration-process something gone wrong: e.q ```{"type":"unregestrationError","message":"XXX"}```
 5. if a push notification was received: e.q ```{"type":"push","push":{XXX}}```
+
+
+# Example
+
+For a simple test you can look at the PushReceiveTest.java. There is also a simple PushServerReceiver implementation. **Please make sure that the Chrome-App is running**!
+
+```java
+String senderId = "yourSenderId";
+String key = "yourKey";
+
+//init the reciver
+PushServerReceiver reciver = new PushServerReceiver("localhost", 9876, senderId, key);
+//int a sender
+Sender sender = new Sender(key);
+
+// wait max 5 sec until the app register
+String pushToken = reciver.getPushToken(5000);
+
+// Send Push notification
+String value = "Some randomness " + UUID.randomUUID().toString();
+Message message = new Message.Builder().addData("testMessage", value).build();
+Result result = sender.send(message, pushToken, 1);
+assertNotNull("check message id", result.getMessageId());
+
+// try to receive the push notification
+JSONObject push = reciver.getPush(5000);
+assertEquals("test receiving push notification", value, push.getJSONObject("data").getString("testMessage"));
+
+```
