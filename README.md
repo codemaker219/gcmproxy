@@ -36,6 +36,7 @@ Commands are
 4. unregister: The app will unregister from GCM. ```{"cmd":"unregister"}``` Response: No Response
 
 The Chrome-App will broadcast to every connected Client 
+
 1. if the push-token is change   e.g ```{"type":"regestrationComplite","token":"XXX"}``` 
 2. if the app has unregistered from GCM e.q ```{"type":"unregestrationComplete","token":""}```
 3. if during the registration-process something gone wrong: e.q ```{"type":"regestrationError","message":"XXX"}```
