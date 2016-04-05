@@ -16,8 +16,6 @@ limitations under the License.
 Author: Renato Mangini (mangini@chromium.org)
  */
 
-const
-DEFAULT_MAX_CONNECTIONS = 5;
 
 (function(exports) {
 
@@ -35,8 +33,6 @@ DEFAULT_MAX_CONNECTIONS = 5;
 	function TcpServer(addr, port, options) {
 		this.addr = addr;
 		this.port = port;
-		this.maxConnections = typeof (options) != 'undefined'
-				&& options.maxConnections || DEFAULT_MAX_CONNECTIONS;
 
 		this._onAccept = this._onAccept.bind(this);
 		this._onAcceptError = this._onAcceptError.bind(this);
@@ -76,7 +72,7 @@ DEFAULT_MAX_CONNECTIONS = 5;
 	TcpServer.getNetworkAddresses = function(callback) {
 		chrome.system.network.getNetworkInterfaces(callback);
 	}
-	
+
 	TcpServer.prototype.getAllConnection = function() {
 		return this.openSockets;
 	}
@@ -160,12 +156,8 @@ DEFAULT_MAX_CONNECTIONS = 5;
 		if (info.socketId != this.serverSocketId)
 			return;
 
-		if (this.openSockets.length >= this.maxConnections) {
-			this._onNoMoreConnectionsAvailable(info.clientSocketId);
-			return;
-		}
-
-		var tcpConnection = new TcpConnection(info.clientSocketId);
+		var tcpConnection = new TcpConnection(info.clientSocketId,
+				this.openSockets);
 		this.openSockets.push(tcpConnection);
 
 		tcpConnection.requestSocketInfo(this._onSocketInfo.bind(this));
@@ -201,9 +193,10 @@ DEFAULT_MAX_CONNECTIONS = 5;
 	 * @param {number}
 	 *            socketId The ID of the server<->client socket
 	 */
-	function TcpConnection(socketId) {
+	function TcpConnection(socketId, openSockets) {
 		this.socketId = socketId;
 		this.socketInfo = null;
+		this.openSockets = openSockets;
 
 		// Callback functions.
 		this.callbacks = {
@@ -287,6 +280,11 @@ DEFAULT_MAX_CONNECTIONS = 5;
 	 */
 	TcpConnection.prototype.close = function() {
 		if (this.socketId) {
+			console.log(this.openSockets.length);
+			var index = this.openSockets.indexOf(this);
+			if (index > -1) {
+				this.openSockets.splice(index, 1);
+			}
 			chrome.sockets.tcp.onReceive.removeListener(this._onReceive);
 			chrome.sockets.tcp.onReceiveError
 					.removeListener(this._onReceiveError);

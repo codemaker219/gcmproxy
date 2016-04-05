@@ -6,6 +6,7 @@ import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.NoSuchElementException;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -15,6 +16,7 @@ public abstract class AbstractPushServerReciver {
 
 	private static final String DELIMITER = "\n\r";
 	private Socket socket;
+	private boolean closed = false;
 	private OutputStreamWriter osw;
 	private ConcurrentLinkedQueue<JSONObject> pushNotifications = new ConcurrentLinkedQueue<>();
 
@@ -33,8 +35,11 @@ public abstract class AbstractPushServerReciver {
 		new Thread() {
 			public void run() {
 				while (true) {
-					String nextLine = sc.nextLine();
 					try {
+						String nextLine = sc.nextLine();
+						if (nextLine.matches("\\s*")) {
+							continue;
+						}
 						JSONObject code = decode(nextLine);
 						String type = code.optString("type", null);
 						if ("unregestrationComplete".equals(type)) {
@@ -52,13 +57,30 @@ public abstract class AbstractPushServerReciver {
 						} else {
 							onUnsupportedMessage(code.toString());
 						}
+					} catch (NoSuchElementException e) {
+						onUnsupportedMessage(e.getMessage());
+						return;
+					} catch (IllegalStateException e) {
+						onUnsupportedMessage(e.getMessage());
+						return;
 					} catch (Exception e) {
-						onUnsupportedMessage(nextLine);
+						if (!closed) {
+							onUnsupportedMessage(e.getMessage());
+						}
 					}
 				}
 			}
 		}.start();
 		osw = new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8);
+	}
+
+	public void close() throws IOException {
+		closed = true;
+		socket.close();
+	}
+
+	public boolean isOpen() {
+		return socket != null && !closed;
 	}
 
 	/**
